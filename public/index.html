@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Lectura de Balanza</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    #resultado { margin-top: 20px; font-size: 18px; }
+    #debug { margin-top: 20px; font-size: 14px; color: gray; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Lectura de la balanza</h1>
+  <button onclick="leerDato()">Leer dato</button>
+  <div id="resultado"></div>
+  <div id="debug"></div> <!-- Para mostrar datos capturados -->
+  
+
+  <script>
+    async function leerDato() {
+      document.getElementById("resultado").innerText = "Leyendo...";
+      document.getElementById("debug").innerText = "";
+
+      try {
+        const resp = await fetch("/leer");
+        const data = await resp.json();
+
+        if (resp.ok) {
+          //Muestra el peso final con valor + unidad
+          if (data.peso && data.peso.valor && data.peso.unidad) {
+            document.getElementById("resultado").innerText =
+              "Peso: " + data.peso.valor + " " + data.peso.unidad;
+          } else {
+            // Si el formato es diferente, mostrar toda la respuesta
+            document.getElementById("resultado").innerText = 
+              "Peso: " + JSON.stringify(data.peso);
+          }
+
+          //  mostrar los 4 datos capturados para debug
+          // if (data.capturados) {
+          //   document.getElementById("debug").innerText =
+          //     "Datos capturados:\n" + JSON.stringify(data.capturados, null, 2);
+          // }
+        } else {
+          document.getElementById("resultado").innerText = "Error: " + data.error;
+        }
+      } catch (err) {
+        document.getElementById("resultado").innerText = "Error de conexión con el servidor.";
+      }
+    }
+  </script>
+</body>
+</html>
