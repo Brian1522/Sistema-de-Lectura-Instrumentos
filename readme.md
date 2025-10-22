@@ -6,7 +6,7 @@ Este proyecto contiene tres aplicaciones para leer datos de diferentes instrumen
 - **Refractómetro** (index.js) - Puerto: 3001  
 - **Polarímetro** (app.js) - Puerto: 3002
 
-## 📋 Requisitos del Sistema
+## Requisitos del Sistema
 
 ### Software Necesario
 - **Node.js** (versión 14 o superior)
@@ -14,8 +14,8 @@ Este proyecto contiene tres aplicaciones para leer datos de diferentes instrumen
 
 ### Hardware Requerido
 - **Balanza**: Conectada al puerto serial COM4
-- **Refractómetro**: IP 192.168.102.204, Puerto 23
-- **Polarímetro**: IP 192.168.102.208, Puerto 23
+- **Refractómetro**: IP 192.168.102.206, Puerto 23
+- **Polarímetro**: IP 192.168.102.230, Puerto 23
 
 ## 🔧 Instalación
 
@@ -30,30 +30,39 @@ npm --version
 ### 2. Instalar Dependencias
 ```bash
 # Navegar al directorio del proyecto
-cd c:\Users\brian\OneDrive\Escritorio\prueba
+cd c:\Users\brian\OneDrive\Escritorio\Sistema_Lecturas
 
 # Instalar todas las dependencias
-npm install express serialport
+npm install express serialport cors axios @serialport/parser-readline
 ```
 
-### 3. Dependencias por Aplicación
+### 3. Dependencias del Proyecto
 
-#### balanza.js
+#### Dependencias Principales
+- **express**: Framework web para Node.js
+- **serialport**: Comunicación con puerto serial (balanza)
+- **cors**: Habilita Cross-Origin Resource Sharing (para Oracle APEX)
+- **axios**: Cliente HTTP para solicitudes
+- **@serialport/parser-readline**: Parser para datos del puerto serial
+
+#### Por Aplicación
+
+**balanza.js**
 ```bash
-npm install express serialport
+npm install express serialport cors @serialport/parser-readline
 ```
 
-#### index.js (Refractómetro)
+**index.js (Refractómetro)**
 ```bash
-npm install express
+npm install express cors
 ```
 
-#### app.js (Polarímetro)
+**app.js (Polarímetro)**
 ```bash
-npm install express
+npm install express cors
 ```
 
-## 🚀 Ejecución
+## Ejecución
 
 ### Ejecutar Cada Aplicación por Separado
 
@@ -76,7 +85,7 @@ node app.js
 ```
 
 
-## 📖 Uso de las APIs
+## Uso de las APIs
 
 ### 1. Balanza (Puerto 3000)
 
@@ -86,6 +95,17 @@ http://localhost:3000
 ```
 
 #### API Endpoints
+
+**Para Oracle APEX:**
+```http
+GET /lectura
+# Respuesta:
+{
+  "value": 125.45
+}
+```
+
+**Información completa:**
 ```http
 GET /leer
 # Respuesta exitosa:
@@ -103,44 +123,49 @@ GET /leer
 - Verifica consistencia con tolerancia del ±1%
 - Rango válido: 0-500g
 - Timeout de 3 segundos
+- **CORS habilitado** para Oracle APEX
 
 ### 2. Refractómetro (Puerto 3001)
 
 #### API Endpoint
+
+**Para Oracle APEX:**
 ```http
 GET /lectura
 # Respuesta:
 {
-  "valor": "1.3456 nD",
-  "fecha": "2024-01-01T10:00:00.000Z",
-  "archivo": "refractometro.txt"
+  "value": 1.3456
 }
 ```
 
 #### Características
-- Conexión TCP a 192.168.102.204:23
+- Conexión TCP a 192.168.102.206:23
 - Comando: "R\r\n"
 - Guarda lecturas en refractometro.txt
+- **CORS habilitado** para Oracle APEX
 
 ### 3. Polarímetro (Puerto 3002)
 
-#### API Endpoint
+#### API Endpoints
+
+**Para Oracle APEX:**
 ```http
 GET /lectura
+POST /lectura
 # Respuesta:
 {
-  "valor": "+12.345°",
-  "fecha": "2024-01-01T10:00:00.000Z",
-  "archivo": "polarimetro.txt"
+  "value": 12.345
 }
 ```
 
 #### Características
-- Conexión TCP a 192.168.102.208:23
+- Conexión TCP a 192.168.102.230:23
 - Comando: "R\r\n"
 - Guarda lecturas en polarimetro.txt
+- **CORS habilitado** para Oracle APEX
+- Soporta métodos GET y POST
 
-## ⚙️ Configuración
+## Configuración
 
 ### Modificar Puerto Serial (Balanza)
 ```javascript
@@ -155,24 +180,92 @@ const port = new SerialPort({
 ### Modificar IPs de Red
 ```javascript
 // En index.js (Refractómetro):
-const REFRACTOMETER_IP = "192.168.102.204"; // ← Cambiar aquí
-
+const REFRACTOMETER_IP = "192.168.102.206";
 // En app.js (Polarímetro):
-const POLARIMETER_IP = "192.168.102.208"; // ← Cambiar aquí
+const POLARIMETER_IP = "192.168.102.230";
 ```
 
 ### Cambiar Puertos de Servidor
 ```javascript
 // En cada archivo:
-const PORT = 3000; // ← Cambiar aquí
+const PORT = 3000; 
 ```
 
-## 📁 Archivos Generados
+##  Integración con Oracle APEX
+
+### Configuración CORS
+Todas las aplicaciones tienen **CORS habilitado** para permitir solicitudes desde Oracle APEX.
+
+### URLs para APEX
+```javascript
+// Balanza
+http://localhost:3000/lectura
+
+// Refractómetro  
+http://localhost:3001/lectura
+
+// Polarímetro
+http://localhost:3002/lectura
+```
+
+### Respuesta Estándar para APEX
+Todos los endpoints `/lectura` devuelven el mismo formato:
+```json
+{
+  "value": número
+}
+```
+
+### Ejemplo de Accion Dinamica en APEX, esta accion va dentro del boton
+```
+---- PLSQL
+DECLARE
+    l_response CLOB;
+    l_numero NUMBER;
+BEGIN
+    -- Llamar al endpoint del Rest Data Source
+    BEGIN
+        l_response := APEX_WEB_SERVICE.MAKE_REST_REQUEST(
+            p_url => 'http://192.168.102.150:3001/lectura',
+            p_http_method => 'GET'
+        );
+        APEX_DEBUG.INFO('Respuesta API: ' || SUBSTR(l_response, 1, 4000)); -- Depuración
+    EXCEPTION
+        WHEN OTHERS THEN
+            APEX_DEBUG.ERROR('Error en MAKE_REST_REQUEST: ' || SQLERRM);
+            :P3_BRIX := 'Error API: ' || SQLERRM; -- Mostrar error en el campo
+            RETURN; -- Salir si falla la API
+    END;
+    
+    -- Parsear el JSON y extraer el valor numérico
+    BEGIN
+        APEX_JSON.PARSE(l_response);
+        l_numero := APEX_JSON.GET_NUMBER(p_path => 'value');
+        APEX_DEBUG.INFO('Valor extraído: ' || l_numero); -- Depuración
+    EXCEPTION
+        WHEN OTHERS THEN
+            APEX_DEBUG.ERROR('Error en parsing JSON: ' || SQLERRM);
+            :P3_BRIX := 'Error JSON: ' || SQLERRM; -- Mostrar error en el campo
+            RETURN; -- Salir si falla el parsing
+    END;
+    
+    -- Asignar al campo numérico
+    :P3_BRIX := l_numero;
+    APEX_DEBUG.INFO('Valor asignado a P3_POL: ' || :P3_BRIX);
+    
+EXCEPTION
+    WHEN OTHERS THEN
+        :P3_BRIX := 'Error general: ' || SQLERRM;
+        APEX_DEBUG.ERROR('Error general: ' || SQLERRM);
+END;
+```
+
+## Archivos Generados
 
 - `refractometro.txt` - Log de lecturas del refractómetro
 - `polarimetro.txt` - Log de lecturas del polarímetro
 
-## 🔍 Solución de Problemas
+## Solución de Problemas
 
 ### Error de Puerto Serial
 ```
@@ -200,7 +293,7 @@ Error: Cannot find module 'serialport'
 ```
 **Solución**: Ejecutar `npm install serialport`
 
-## 📊 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 ├── balanza.js          # Aplicación de balanza
@@ -215,5 +308,5 @@ Error: Cannot find module 'serialport'
 ```
 
 # Instalar todas las dependencias de una vez
-npm install express serialport
+npm install express serialport cors axios @serialport/parser-readline
 ```

@@ -1,2 +1,10 @@
 # Dependencies
 node_modules/
+
+# Log files
+refractometro.txt
+polarimetro.txt
+
+# Temporary files
+*.tmp
+*.log

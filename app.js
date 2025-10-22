@@ -2,12 +2,23 @@ const express = require("express");
 const net = require("net");
 const fs = require("fs");
 const path = require("path");
+const cors = require("cors");
 
 const app = express();
 const PORT = 3002;
 
+// Configurar CORS para permitir solicitudes desde Oracle APEX
+app.use(cors({
+  origin: "*", // En producción, especifica tu dominio de APEX
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// Middleware para parsear JSON
+app.use(express.json());
+
 // Configuración del polarímetro
-const POLARIMETER_IP = "192.168.102.208";
+const POLARIMETER_IP = "192.168.102.195";
 const POLARIMETER_PORT = 23;
 // Definir constantes según documentación
 const CR = "\r";  // Carriage Return, ASCII decimal 13
@@ -79,22 +90,44 @@ function guardarEnArchivo(lectura) {
   fs.appendFileSync(LOG_FILE, linea, "utf8");
 }
 
-// Endpoint para obtener una nueva lectura
+// Endpoint GET para obtener solo el valor numérico
 app.get("/lectura", async (req, res) => {
   try {
     const lectura = await getReading();
     guardarEnArchivo(lectura);
-
-    res.json({
-      valor: lectura,
-      fecha: new Date().toISOString(),
-      archivo: LOG_FILE,
-    });
+    
+    // Extraer el número de la lectura de manera más flexible
+    let numero;
+    if (lectura.includes(',')) {
+      // Si contiene comas, usar el formato anterior
+      numero = parseFloat(lectura.split(',')[2]);
+    } else {
+      // Si es un número simple, parsearlo directamente
+      numero = parseFloat(lectura);
+    }
+    
+    // Verificar que el número es válido
+    if (isNaN(numero)) {
+      throw new Error(`No se pudo extraer un número válido de: ${lectura}`);
+    }
+    
+    res.json({ value: numero });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
+// Endpoint POST para obtener solo el valor numérico
+app.post("/lectura", async (req, res) => {
+  try {
+    const lectura = await getReading();
+    guardarEnArchivo(lectura);
+    const numero = parseFloat(lectura.split(',')[2]); // Extrae 0.07
+    res.json({ value: numero }); // Devuelve { "value": 0.07 }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 // Servidor escuchando
 app.listen(PORT, () => {
   console.log(`Servidor API escuchando en http://localhost:${PORT}`);

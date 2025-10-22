@@ -1,8 +1,18 @@
 const express = require("express");
 const { SerialPort, ReadlineParser } = require("serialport");
+const cors = require("cors");
 
 const app = express();
 const PORT = 3000;
+
+// CORS para permitir solicitudes desde Oracle APEX
+app.use(cors({
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// Middleware para parsear JSON
+app.use(express.json());
 
 const port = new SerialPort({
   path: "COM4",
@@ -33,8 +43,8 @@ function parseDato(dato) {
   };
 }
 
-// Endpoint: leer dato estable bajo demanda
-app.get("/leer", async (req, res) => {
+// Endpoint: leer dato estable bajo demanda (APEX)
+app.get("/lectura", async (req, res) => {
   let datosCapturados = [];
 
   // Handler para recolectar 4 datos nuevos
@@ -60,8 +70,61 @@ app.get("/leer", async (req, res) => {
   }, 3000);
 });
 
-// Función para evaluar datos
+// Endpoint: leer dato estable bajo demanda (original)
+app.get("/leer", async (req, res) => {
+  let datosCapturados = [];
+
+  // Handler para recolectar 4 datos nuevos
+  const onData = (linea) => {
+    const dato = linea.trim();
+    datosCapturados.push(dato);
+
+    if (datosCapturados.length >= 4) {
+      parser.off("data", onData); // detener listener
+      evaluarDatosCompleto(datosCapturados, res);
+    }
+  };
+
+  // Escuchar desde este momento
+  parser.on("data", onData);
+
+  // Seguridad: timeout de 3 segundos
+  setTimeout(() => {
+    if (datosCapturados.length < 4) {
+      parser.off("data", onData);
+      res.status(408).json({ error: "No se recibieron suficientes datos en el tiempo límite." });
+    }
+  }, 3000);
+});
+
+// Función para evaluar datos y devolver solo el valor (para APEX)
 function evaluarDatos(datos, res) {
+  const objetos = datos.map(parseDato).filter((o) => o !== null);
+
+  // Validar rango (0 - 500g)
+  const enRango = objetos.filter((o) => o.valor > 0 && o.valor <= 500);
+  if (enRango.length < 4) {
+    return res.status(400).json({ error: "Los datos no están en el rango válido (0 - 500g)." });
+  }
+
+  // Verificar consistencia (±1%)
+  const ref = enRango[0].valor;
+  const coincidencias = enRango.filter((o) => {
+    const diff = Math.abs(o.valor - ref);
+    return diff <= ref * 0.01; // dentro del 1%
+  });
+
+  if (coincidencias.length >= 3) {
+    return res.json({
+      valor: parseFloat(ref.toFixed(2))
+    });
+  } else {
+    return res.status(400).json({ error: "No hay consistencia suficiente en los últimos datos." });
+  }
+}
+
+// Función para evaluar datos  ( original)
+function evaluarDatosCompleto(datos, res) {
   const objetos = datos.map(parseDato).filter((o) => o !== null);
 
   // Validar rango (0 - 500g)
@@ -83,14 +146,14 @@ function evaluarDatos(datos, res) {
         valor: ref.toFixed(2),
         unidad: enRango[0].unidad
       },
-      capturados: enRango // 👈 también devuelve los 4 datos para debug
+      capturados: enRango //  también devuelve los 4 datos para debug
     });
   } else {
     return res.status(400).json({ error: "No hay consistencia suficiente en los últimos datos.", capturados: enRango });
   }
 }
 
-app.use(express.static("public")); // servir frontend
+app.use(express.static("public")); //  frontend
 
 app.listen(PORT, () => {
   console.log(`Servidor en http://localhost:${PORT}`);

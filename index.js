@@ -2,12 +2,23 @@ const express = require("express");
 const net = require("net");
 const fs = require("fs");
 const path = require("path");
+const cors = require("cors");
 
 const app = express();
 const PORT = 3001;
 
+// Configurar CORS para permitir solicitudes desde Oracle APEX
+app.use(cors({
+  origin: "*", // En producción, especifica tu dominio de APEX
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// Middleware para parsear JSON
+app.use(express.json());
+
 // Configuración del refractómetro
-const REFRACTOMETER_IP = "192.168.102.204";
+const REFRACTOMETER_IP = "192.168.102.203";
 const REFRACTOMETER_PORT = 23;
 // Definir constantes según documentación RFM700-M
 const CR = "\r";  // Carriage Return, ASCII decimal 13
@@ -72,10 +83,19 @@ app.get("/lectura", async (req, res) => {
     const lectura = await getReading();
     guardarEnArchivo(lectura);
 
+    // Extraer el valor numérico de la lectura
+    let numero = parseFloat(lectura);
+    
+    // Verificar que el número es válido
+    if (isNaN(numero)) {
+      throw new Error(`No se pudo extraer un número válido de: ${lectura}`);
+    }
+
     res.json({
-      valor: lectura,
-      fecha: new Date().toISOString(),
-      archivo: LOG_FILE,
+      value: numero,
+      // valor: lectura,
+      // fecha: new Date().toISOString(),
+      // archivo: LOG_FILE,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
