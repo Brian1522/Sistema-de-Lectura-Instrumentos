@@ -10,7 +10,7 @@ const PORT = 3001;
 // Configurar CORS para permitir solicitudes desde Oracle APEX
 app.use(cors({
   origin: "*", // En producción, especifica tu dominio de APEX
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
